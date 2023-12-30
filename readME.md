@@ -10,3 +10,6 @@ becomes extremely slow if you increase depth beyond 3. I'm pretty sure it's an i
 why the AI makes some very weird moves.
 
 To-do: Add alpha-beta pruning and move validation for human users tomorrow.
+
+Day 3:
+Added alpha-beta pruning. Implemented user interface in web browser using Flask.

@@ -1,10 +1,18 @@
 import chess
+import chess.svg
+from flask import Flask, Response, request
+import traceback
+import time
+import webbrowser
+from IPython.display import SVG
 import math
 from tables import pawnscore, knightscore, bishopscore, queenscore, rookscore, kingscore_middle, kingscore_end
 board = chess.Board()
 
+app = Flask(__name__)
+
 #minmax algorithm
-def minimax(currMove, depth, maximizingPlayer):
+def minimax(currMove, depth, alpha, beta, maximizingPlayer):
     if (depth == 0 or board.is_checkmate() or board.is_insufficient_material()):
         return (material_eval(), currMove)
     if maximizingPlayer:
@@ -12,10 +20,14 @@ def minimax(currMove, depth, maximizingPlayer):
         bestMove = None
         for move in board.legal_moves:
             board.push(move)
-            evaluation,_ = minimax(move, depth - 1, not maximizingPlayer)
+            evaluation,_ = minimax(move, depth - 1, alpha, beta, not maximizingPlayer)
             if (evaluation > maxEvaluation):
                 maxEvaluation = evaluation
                 bestMove = move
+            alpha = evaluation if evaluation > alpha else alpha
+            if (beta <= alpha):
+                board.pop()
+                break
             board.pop()
         return (maxEvaluation, bestMove)
     else:
@@ -23,10 +35,14 @@ def minimax(currMove, depth, maximizingPlayer):
         bestMove = None
         for move in board.legal_moves:
             board.push(move)
-            evaluation,_ = minimax(move, depth - 1, not maximizingPlayer)
+            evaluation,_ = minimax(move, depth - 1, alpha, beta, not maximizingPlayer)
             if (evaluation < minEvaluation):
                 minEvaluation = evaluation
                 bestMove = move
+            beta = evaluation if evaluation < beta else beta
+            if (beta <= alpha):
+                board.pop()
+                break
             board.pop()
         return (minEvaluation, bestMove)
 
@@ -110,19 +126,67 @@ def material_eval():
 
     return whitescore if not board.turn else -blackscore
 
+@app.route("/")
+def main():
+    global board
+    ret = '<html><head>'
+    ret += '<style>input {font-size: 20px; } button { font-size: 20px; }</style>'
+    ret += '</head><body>'
+    ret += '<img width=510 height=510 src="/board.svg?%f"></img></br></br>' % time.time()
+    ret += '<form action="/game/" method="post"><button name="New Game" type="submit">New Game</button></form>'
+    ret += '<form action="/undo/" method="post"><button name="Undo" type="submit">Undo Last Move</button></form>'
+    ret += '<form action="/move/"><input type="submit" value="Make Human Move:"><input name="move" type="text"></input></form>'
+    ret += '<form action="/dev/" method="post"><button name="Comp Move" type="submit">Make Ai Move</button></form>'
+    return ret
+# Display Board
+@app.route("/board.svg/")
+def board():
+    return Response(chess.svg.board(board=board, size=700), mimetype='image/svg+xml')
+# Human Move
+@app.route("/move/")
+def move():
+    try:
+        move = request.args.get('move', default="")
+        board.push_san(move)
+    except Exception:
+        traceback.print_exc()
+    return main()
+# Make Ai’s Move
+@app.route("/dev/", methods=['POST'])
+def dev():
+    try:
+        #aimove()
+        evaluated, aiMove = minimax(None, 5, -math.inf, math.inf, board.turn)
+        board.push(aiMove)
+    except Exception:
+        traceback.print_exc()
+    return main()
 
-#game playing loop
-while (not board.is_checkmate()):
-    print(board)
-    move = input('Please enter your move: ')
-    board.push_san(move)
-    evaluated,aiMove = minimax("e7e5", 2, False)
-    print(f'AI chose {aiMove}')
-    board.push(aiMove)
-    print(material_eval())
+# New Game
+@app.route("/game/", methods=['POST'])
+def game():
+    board.reset()
+    return main()
+# Undo
+@app.route("/undo/", methods=['POST'])
+def undo():
+    try:
+        board.pop()
+    except Exception:
+        traceback.print_exc()
+    return main()
 
+board = chess.Board()
+webbrowser.open("http://127.0.0.1:5000/")
+app.run()
 
-
-
-
-
+#game playing loop for terminal
+# while (not board.is_checkmate()):
+#     print(board)
+#     print(board.legal_moves)
+#     move = input('Please enter your move: ')
+#     board.push_san(move)
+#     evaluated,aiMove = minimax("e7e5", 5, -math.inf, math.inf, False)
+#     print(f'AI chose {aiMove}')
+#     board.push(aiMove)
+#     print(material_eval())
